@@ -23,10 +23,10 @@ test_expect_success 'write graph with no packs' '
 	test_path_is_missing $objdir/info/commit-graph
 '
 
-test_expect_success 'exit with correct error on bad input to --stdin-packs' '
+test_expect_success 'exit with correct error on bad input to --input=stdin-packs' '
 	cd "$TRASH_DIRECTORY/full" &&
 	echo doesnotexist >in &&
-	test_expect_code 1 git commit-graph write --stdin-packs <in 2>stderr &&
+	test_expect_code 1 git commit-graph write --input=stdin-packs <in 2>stderr &&
 	test_i18ngrep "error adding pack" stderr
 '
 
@@ -40,12 +40,12 @@ test_expect_success 'create commits and repack' '
 	git repack
 '
 
-test_expect_success 'exit with correct error on bad input to --stdin-commits' '
+test_expect_success 'exit with correct error on bad input to --input=stdin-commits' '
 	cd "$TRASH_DIRECTORY/full" &&
-	echo HEAD | test_expect_code 1 git commit-graph write --stdin-commits 2>stderr &&
+	echo HEAD | test_expect_code 1 git commit-graph write --input=stdin-commits 2>stderr &&
 	test_i18ngrep "invalid commit object id" stderr &&
 	# valid tree OID, but not a commit OID
-	git rev-parse HEAD^{tree} | test_expect_code 1 git commit-graph write --stdin-commits 2>stderr &&
+	git rev-parse HEAD^{tree} | test_expect_code 1 git commit-graph write --input=stdin-commits 2>stderr &&
 	test_i18ngrep "invalid commit object id" stderr
 '
 
@@ -227,7 +227,7 @@ graph_git_behavior 'cleared graph, commit 8 vs merge 2' full commits/8 merge/2
 
 test_expect_success 'build graph from latest pack with closure' '
 	cd "$TRASH_DIRECTORY/full" &&
-	cat new-idx | git commit-graph write --stdin-packs &&
+	cat new-idx | git commit-graph write --input=stdin-packs &&
 	test_path_is_file $objdir/info/commit-graph &&
 	graph_read_expect "9" "extra_edges"
 '
@@ -240,7 +240,7 @@ test_expect_success 'build graph from commits with closure' '
 	git tag -a -m "merge" tag/merge merge/2 &&
 	git rev-parse tag/merge >commits-in &&
 	git rev-parse merge/1 >>commits-in &&
-	cat commits-in | git commit-graph write --stdin-commits &&
+	cat commits-in | git commit-graph write --input=stdin-commits &&
 	test_path_is_file $objdir/info/commit-graph &&
 	graph_read_expect "6"
 '
@@ -250,7 +250,7 @@ graph_git_behavior 'graph from commits, commit 8 vs merge 2' full commits/8 merg
 
 test_expect_success 'build graph from commits with append' '
 	cd "$TRASH_DIRECTORY/full" &&
-	git rev-parse merge/3 | git commit-graph write --stdin-commits --append &&
+	git rev-parse merge/3 | git commit-graph write --input=stdin-commits --input=append &&
 	test_path_is_file $objdir/info/commit-graph &&
 	graph_read_expect "10" "extra_edges"
 '
@@ -260,7 +260,7 @@ graph_git_behavior 'append graph, commit 8 vs merge 2' full commits/8 merge/2
 
 test_expect_success 'build graph using --reachable' '
 	cd "$TRASH_DIRECTORY/full" &&
-	git commit-graph write --reachable &&
+	git commit-graph write --input=reachable &&
 	test_path_is_file $objdir/info/commit-graph &&
 	graph_read_expect "11" "extra_edges"
 '
@@ -301,14 +301,14 @@ test_expect_success 'perform fast-forward merge in full repo' '
 test_expect_success 'check that gc computes commit-graph' '
 	cd "$TRASH_DIRECTORY/full" &&
 	git commit --allow-empty -m "blank" &&
-	git commit-graph write --reachable &&
+	git commit-graph write --input=reachable &&
 	cp $objdir/info/commit-graph commit-graph-before-gc &&
 	git reset --hard HEAD~1 &&
 	git config gc.writeCommitGraph true &&
 	git gc &&
 	cp $objdir/info/commit-graph commit-graph-after-gc &&
 	! test_cmp_bin commit-graph-before-gc commit-graph-after-gc &&
-	git commit-graph write --reachable &&
+	git commit-graph write --input=reachable &&
 	test_cmp_bin commit-graph-after-gc $objdir/info/commit-graph
 '
 
@@ -318,18 +318,18 @@ test_expect_success 'replace-objects invalidates commit-graph' '
 	git clone full replace &&
 	(
 		cd replace &&
-		git commit-graph write --reachable &&
+		git commit-graph write --input=reachable &&
 		test_path_is_file .git/objects/info/commit-graph &&
 		git replace HEAD~1 HEAD~2 &&
 		git -c core.commitGraph=false log >expect &&
 		git -c core.commitGraph=true log >actual &&
 		test_cmp expect actual &&
-		git commit-graph write --reachable &&
+		git commit-graph write --input=reachable &&
 		git -c core.commitGraph=false --no-replace-objects log >expect &&
 		git -c core.commitGraph=true --no-replace-objects log >actual &&
 		test_cmp expect actual &&
 		rm -rf .git/objects/info/commit-graph &&
-		git commit-graph write --reachable &&
+		git commit-graph write --input=reachable &&
 		test_path_is_file .git/objects/info/commit-graph
 	)
 '
@@ -340,7 +340,7 @@ test_expect_success 'commit grafts invalidate commit-graph' '
 	git clone full graft &&
 	(
 		cd graft &&
-		git commit-graph write --reachable &&
+		git commit-graph write --input=reachable &&
 		test_path_is_file .git/objects/info/commit-graph &&
 		H1=$(git rev-parse --verify HEAD~1) &&
 		H3=$(git rev-parse --verify HEAD~3) &&
@@ -348,12 +348,12 @@ test_expect_success 'commit grafts invalidate commit-graph' '
 		git -c core.commitGraph=false log >expect &&
 		git -c core.commitGraph=true log >actual &&
 		test_cmp expect actual &&
-		git commit-graph write --reachable &&
+		git commit-graph write --input=reachable &&
 		git -c core.commitGraph=false --no-replace-objects log >expect &&
 		git -c core.commitGraph=true --no-replace-objects log >actual &&
 		test_cmp expect actual &&
 		rm -rf .git/objects/info/commit-graph &&
-		git commit-graph write --reachable &&
+		git commit-graph write --input=reachable &&
 		test_path_is_missing .git/objects/info/commit-graph
 	)
 '
@@ -364,10 +364,10 @@ test_expect_success 'replace-objects invalidates commit-graph' '
 	git clone --depth 2 "file://$TRASH_DIRECTORY/full" shallow &&
 	(
 		cd shallow &&
-		git commit-graph write --reachable &&
+		git commit-graph write --input=reachable &&
 		test_path_is_missing .git/objects/info/commit-graph &&
 		git fetch origin --unshallow &&
-		git commit-graph write --reachable &&
+		git commit-graph write --input=reachable &&
 		test_path_is_file .git/objects/info/commit-graph
 	)
 '
@@ -380,7 +380,7 @@ test_expect_success 'replace-objects invalidates commit-graph' '
 
 test_expect_success 'git commit-graph verify' '
 	cd "$TRASH_DIRECTORY/full" &&
-	git rev-parse commits/8 | git commit-graph write --stdin-commits &&
+	git rev-parse commits/8 | git commit-graph write --input=stdin-commits &&
 	git commit-graph verify >output
 '
 
@@ -591,7 +591,7 @@ test_expect_success 'setup non-the_repository tests' '
 	test_commit -C repo two &&
 	git -C repo config core.commitGraph true &&
 	git -C repo rev-parse two | \
-		git -C repo commit-graph write --stdin-commits
+		git -C repo commit-graph write --input=stdin-commits
 '
 
 test_expect_success 'parse_commit_in_graph works for non-the_repository' '
@@ -637,7 +637,7 @@ test_expect_success 'corrupt commit-graph write (broken parent)' '
 		EOF
 		broken="$(git hash-object -w -t commit --literally broken)" &&
 		git commit-tree -p "$broken" -m "good commit" "$empty" >good &&
-		test_must_fail git commit-graph write --stdin-commits \
+		test_must_fail git commit-graph write --input=stdin-commits \
 			<good 2>test_err &&
 		test_i18ngrep "unable to parse commit" test_err
 	)
@@ -658,7 +658,7 @@ test_expect_success 'corrupt commit-graph write (missing tree)' '
 		EOF
 		broken="$(git hash-object -w -t commit --literally broken)" &&
 		git commit-tree -p "$broken" -m "good" "$tree" >good &&
-		test_must_fail git commit-graph write --stdin-commits \
+		test_must_fail git commit-graph write --input=stdin-commits \
 			<good 2>test_err &&
 		test_i18ngrep "unable to parse commit" test_err
 	)
