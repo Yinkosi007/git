@@ -46,6 +46,7 @@ static struct object_directory *find_odb_or_die(struct repository *r,
 static int graph_verify(int argc, const char **argv)
 {
 	struct commit_graph *graph = NULL;
+	struct object_directory *odb = NULL;
 	char *graph_name;
 	int open_ok;
 	int fd;
@@ -76,7 +77,8 @@ static int graph_verify(int argc, const char **argv)
 	if (opts.progress)
 		flags |= COMMIT_GRAPH_WRITE_PROGRESS;
 
-	graph_name = get_commit_graph_filename(opts.obj_dir);
+	odb = find_odb_or_die(the_repository, opts.obj_dir);
+	graph_name = get_commit_graph_filename(odb);
 	open_ok = open_commit_graph(graph_name, &fd, &st);
 	if (!open_ok && errno != ENOENT)
 		die_errno(_("Could not open commit-graph '%s'"), graph_name);
@@ -85,11 +87,8 @@ static int graph_verify(int argc, const char **argv)
 
 	if (open_ok)
 		graph = load_commit_graph_one_fd_st(fd, &st);
-	else {
-		struct object_directory *odb;
-		if ((odb = find_odb_or_die(the_repository, opts.obj_dir)))
-			graph = read_commit_graph_one(the_repository, odb);
-	}
+	else
+		graph = read_commit_graph_one(the_repository, odb);
 
 	/* Return failure if open_ok predicted success */
 	if (!graph)
