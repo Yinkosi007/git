@@ -34,6 +34,15 @@ static struct opts_commit_graph {
 	int progress;
 } opts;
 
+static struct object_directory *find_odb_or_die(struct repository *r,
+						const char *obj_dir)
+{
+	struct object_directory *odb = find_odb(r, obj_dir);
+	if (!odb)
+		die(_("could not find object directory matching %s"), obj_dir);
+	return odb;
+}
+
 static int graph_verify(int argc, const char **argv)
 {
 	struct commit_graph *graph = NULL;
@@ -78,7 +87,7 @@ static int graph_verify(int argc, const char **argv)
 		graph = load_commit_graph_one_fd_st(fd, &st);
 	else {
 		struct object_directory *odb;
-		if ((odb = find_odb(the_repository, opts.obj_dir)))
+		if ((odb = find_odb_or_die(the_repository, opts.obj_dir)))
 			graph = read_commit_graph_one(the_repository, odb);
 	}
 
@@ -149,7 +158,7 @@ static int graph_write(int argc, const char **argv)
 		flags |= COMMIT_GRAPH_WRITE_PROGRESS;
 
 	read_replace_refs = 0;
-	odb = find_odb(the_repository, opts.obj_dir);
+	odb = find_odb_or_die(the_repository, opts.obj_dir);
 
 	if (opts.reachable) {
 		if (write_commit_graph_reachable(odb->path, flags, &split_opts))
