@@ -97,7 +97,7 @@ static int graph_verify(int argc, const char **argv)
 	if (open_ok)
 		graph = load_commit_graph_one_fd_st(fd, &st);
 	else
-		graph = read_commit_graph_one(the_repository, odb->path);
+		graph = read_commit_graph_one(the_repository, odb);
 
 	/* Return failure if open_ok predicted success */
 	if (!graph)
