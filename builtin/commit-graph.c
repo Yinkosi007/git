@@ -161,7 +161,7 @@ static int graph_write(int argc, const char **argv)
 	odb = find_odb_or_die(the_repository, opts.obj_dir);
 
 	if (opts.reachable) {
-		if (write_commit_graph_reachable(odb->path, flags, &split_opts))
+		if (write_commit_graph_reachable(odb, flags, &split_opts))
 			return 1;
 		return 0;
 	}
@@ -183,7 +183,7 @@ static int graph_write(int argc, const char **argv)
 		UNLEAK(buf);
 	}
 
-	if (write_commit_graph(odb->path,
+	if (write_commit_graph(odb,
 			       pack_indexes,
 			       commit_hex,
 			       flags,

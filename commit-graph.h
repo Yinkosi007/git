@@ -95,10 +95,10 @@ struct split_commit_graph_opts {
  * is not compatible with the commit-graph feature, then the
  * methods will return 0 without writing a commit-graph.
  */
-int write_commit_graph_reachable(const char *obj_dir,
+int write_commit_graph_reachable(struct object_directory *odb,
 				 enum commit_graph_write_flags flags,
 				 const struct split_commit_graph_opts *split_opts);
-int write_commit_graph(const char *obj_dir,
+int write_commit_graph(struct object_directory *odb,
 		       struct string_list *pack_indexes,
 		       struct string_list *commit_hex,
 		       enum commit_graph_write_flags flags,
