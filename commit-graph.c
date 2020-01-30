@@ -128,7 +128,8 @@ int open_commit_graph(const char *graph_file, int *fd, struct stat *st)
 	return 1;
 }
 
-struct commit_graph *load_commit_graph_one_fd_st(int fd, struct stat *st)
+struct commit_graph *load_commit_graph_one_fd_st(int fd, struct stat *st,
+						 struct object_directory *odb)
 {
 	void *graph_map;
 	size_t graph_size;
@@ -144,7 +145,9 @@ struct commit_graph *load_commit_graph_one_fd_st(int fd, struct stat *st)
 	graph_map = xmmap(NULL, graph_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	ret = parse_commit_graph(graph_map, fd, graph_size);
 
-	if (!ret) {
+	if (ret)
+		ret->odb = odb;
+	else {
 		munmap(graph_map, graph_size);
 		close(fd);
 	}
@@ -319,7 +322,8 @@ struct commit_graph *parse_commit_graph(void *graph_map, int fd,
 	return graph;
 }
 
-static struct commit_graph *load_commit_graph_one(const char *graph_file)
+static struct commit_graph *load_commit_graph_one(const char *graph_file,
+						  struct object_directory *odb)
 {
 
 	struct stat st;
@@ -330,7 +334,7 @@ static struct commit_graph *load_commit_graph_one(const char *graph_file)
 	if (!open_ok)
 		return NULL;
 
-	g = load_commit_graph_one_fd_st(fd, &st);
+	g = load_commit_graph_one_fd_st(fd, &st, odb);
 
 	if (g)
 		g->filename = xstrdup(graph_file);
@@ -342,11 +346,8 @@ static struct commit_graph *load_commit_graph_v1(struct repository *r,
 						 struct object_directory *odb)
 {
 	char *graph_name = get_commit_graph_filename(odb);
-	struct commit_graph *g = load_commit_graph_one(graph_name);
+	struct commit_graph *g = load_commit_graph_one(graph_name, odb);
 	free(graph_name);
-
-	if (g)
-		g->odb = odb;
 
 	return g;
 }
@@ -426,13 +427,11 @@ static struct commit_graph *load_commit_graph_chain(struct repository *r,
 		valid = 0;
 		for (odb = r->objects->odb; odb; odb = odb->next) {
 			char *graph_name = get_split_graph_filename(odb, line.buf);
-			struct commit_graph *g = load_commit_graph_one(graph_name);
+			struct commit_graph *g = load_commit_graph_one(graph_name, odb);
 
 			free(graph_name);
 
 			if (g) {
-				g->odb = odb;
-
 				if (add_graph_to_chain(g, graph_chain, oids, i)) {
 					graph_chain = g;
 					valid = 1;
