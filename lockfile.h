@@ -159,9 +159,17 @@ struct lock_file {
  * timeout_ms is -1, retry indefinitely. The flags argument and error
  * handling are described above.
  */
-int hold_lock_file_for_update_timeout(
+int hold_lock_file_for_update_timeout_mode(
 		struct lock_file *lk, const char *path,
-		int flags, long timeout_ms);
+		int flags, long timeout_ms, int mode);
+
+static inline int hold_lock_file_for_update_timeout(
+		struct lock_file *lk, const char *path,
+		int flags, long timeout_ms)
+{
+	return hold_lock_file_for_update_timeout_mode(lk, path, flags,
+						      timeout_ms, 0666);
+}
 
 /*
  * Attempt to create a lockfile for the file at `path` and return a
@@ -173,6 +181,13 @@ static inline int hold_lock_file_for_update(
 		int flags)
 {
 	return hold_lock_file_for_update_timeout(lk, path, flags, 0);
+}
+
+static inline int hold_lock_file_for_update_mode(
+		struct lock_file *lk, const char *path,
+		int flags, int mode)
+{
+	return hold_lock_file_for_update_timeout_mode(lk, path, flags, 0, mode);
 }
 
 /*
