@@ -135,6 +135,17 @@ depth is 4095.
 	leading directory (e.g. `pack-123.pack`). The option could be
 	specified multiple times to keep multiple packs.
 
+--assume-kept-packs-closed[=<in-core|on-disk>]::
+	This flag causes `git rev-list` to halt the object traversal
+	when it encounters an object found in a kept pack. This is
+	dissimilar to `--honor-pack-keep`, which only prunes unwanted
+	results after the full traversal is completed.
++
+Without any arguments, both in-core and on-disk packs are considered.
+Passing `in-core` or `on-disk` limits the packs which will halt
+traversal to those specified by `--keep-pack`, or those which have
+`.keep` files, respectively.
+
 --incremental::
 	This flag causes an object already in a pack to be ignored
 	even if it would have otherwise been packed.
