@@ -348,6 +348,13 @@ int for_each_fullref_in(const char *prefix, each_ref_fn fn, void *cb_data,
 			unsigned int broken);
 
 /**
+ * iterate all refs which are descendent from the longest common prefix among
+ * the list "patterns".
+ */
+int for_each_fullref_in_prefixes(const char *namespace, const char **patterns,
+				 each_ref_fn fn, void *cb_data,
+				 unsigned int broken);
+/**
  * iterate refs from the respective area.
  */
 int for_each_tag_ref(each_ref_fn fn, void *cb_data);
