@@ -837,6 +837,7 @@ static int write_midx_internal(const char *object_dir, struct multi_pack_index *
 {
 	unsigned char cur_chunk, num_chunks = 0;
 	char *midx_name;
+	unsigned char midx_hash[GIT_MAX_RAWSZ];
 	uint32_t i;
 	struct hashfile *f = NULL;
 	struct lock_file lk;
@@ -1098,7 +1099,7 @@ static int write_midx_internal(const char *object_dir, struct multi_pack_index *
 		    written,
 		    chunk_offsets[num_chunks]);
 
-	finalize_hashfile(f, NULL, CSUM_FSYNC | CSUM_HASH_IN_STREAM);
+	finalize_hashfile(f, midx_hash, CSUM_FSYNC | CSUM_HASH_IN_STREAM);
 	commit_lock_file(&lk);
 
 cleanup:
