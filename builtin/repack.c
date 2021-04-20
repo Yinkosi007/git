@@ -494,8 +494,9 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 				N_("repack objects in packs marked with .keep")),
 		OPT_STRING_LIST(0, "keep-pack", &keep_pack_list, N_("name"),
 				N_("do not repack this pack")),
-		OPT_INTEGER('g', "geometric", &geometric_factor,
-			    N_("find a geometric progression with factor <N>")),
+		{ OPTION_INTEGER, 'g', "geometric", &geometric_factor, N_("n"),
+				N_("find a geometric progression with factor <n>"),
+				PARSE_OPT_OPTARG, NULL, 2 },
 		OPT_END()
 	};
 

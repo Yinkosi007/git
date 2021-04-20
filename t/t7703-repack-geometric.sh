@@ -123,7 +123,7 @@ test_expect_success '--geometric with small- and large-pack rollup' '
 
 		find $objdir/pack -name "*.pack" | sort >before &&
 
-		git repack --geometric 2 -d &&
+		git repack --geometric -d &&
 
 		find $objdir/pack -name "*.pack" | sort >after &&
 		comm -12 before after >untouched &&
