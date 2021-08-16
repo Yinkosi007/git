@@ -1517,14 +1517,6 @@ static void final(const char *final_pack_name, const char *curr_pack_name,
 	} else if (from_stdin)
 		chmod(final_pack_name, 0444);
 
-	if (final_index_name != curr_index_name) {
-		if (!final_index_name)
-			final_index_name = odb_pack_name(&index_name, hash, "idx");
-		if (finalize_object_file(curr_index_name, final_index_name))
-			die(_("cannot store index file"));
-	} else
-		chmod(final_index_name, 0444);
-
 	if (curr_rev_index_name) {
 		if (final_rev_index_name != curr_rev_index_name) {
 			if (!final_rev_index_name)
@@ -1534,6 +1526,14 @@ static void final(const char *final_pack_name, const char *curr_pack_name,
 		} else
 			chmod(final_rev_index_name, 0444);
 	}
+
+	if (final_index_name != curr_index_name) {
+		if (!final_index_name)
+			final_index_name = odb_pack_name(&index_name, hash, "idx");
+		if (finalize_object_file(curr_index_name, final_index_name))
+			die(_("cannot store index file"));
+	} else
+		chmod(final_index_name, 0444);
 
 	if (do_fsck_object) {
 		struct packed_git *p;
