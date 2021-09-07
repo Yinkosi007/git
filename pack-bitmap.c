@@ -1744,6 +1744,28 @@ int test_bitmap_commits(struct repository *r)
 	return 0;
 }
 
+int test_bitmap_hashes(struct repository *r)
+{
+	struct bitmap_index *bitmap_git = prepare_bitmap_git(r);
+	struct object_id oid;
+	uint32_t i;
+
+	if (!bitmap_git->hashes)
+		goto cleanup;
+
+	for (i = 0; i < bitmap_num_objects(bitmap_git); i++) {
+		nth_bitmap_object_oid(bitmap_git, &oid, i);
+
+		printf("%s %"PRIu32"\n",
+		       oid_to_hex(&oid), get_be32(bitmap_git->hashes + i));
+	}
+
+cleanup:
+	free_bitmap_index(bitmap_git);
+
+	return 0;
+}
+
 int rebuild_bitmap(const uint32_t *reposition,
 		   struct ewah_bitmap *source,
 		   struct bitmap *dest)
