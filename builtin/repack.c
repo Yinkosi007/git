@@ -258,9 +258,11 @@ static void repack_promisor_objects(const struct pack_objects_args *args,
 	for_each_packed_object(write_oid, &cmd,
 			       FOR_EACH_OBJECT_PROMISOR_ONLY);
 
-	if (cmd.in == -1)
+	if (cmd.in == -1) {
 		/* No packed objects; cmd was never started */
+		child_process_clear(&cmd);
 		return;
+	}
 
 	close(cmd.in);
 
@@ -586,8 +588,10 @@ static int write_midx_included_packs(struct string_list *include,
 		strvec_pushf(&cmd.args, "--refs-snapshot=%s", refs_snapshot);
 
 	ret = start_command(&cmd);
-	if (ret)
+	if (ret) {
+		child_process_clear(&cmd);
 		return ret;
+	}
 
 	in = xfdopen(cmd.in, "w");
 	for_each_string_list_item(item, include)
@@ -608,9 +612,10 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 	struct pack_geometry *geometry = NULL;
 	struct strbuf line = STRBUF_INIT;
 	struct tempfile *refs_snapshot = NULL;
-	int i, ext, ret;
+	int i, ext, ret = 0;
 	FILE *out;
 	int show_progress = isatty(2);
+	int cmd_cleared = 0;
 
 	/* variables to be filled by option parsing */
 	int pack_everything = 0;
@@ -794,7 +799,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 
 	ret = start_command(&cmd);
 	if (ret)
-		return ret;
+		goto cleanup;
 
 	if (geometry) {
 		FILE *in = xfdopen(cmd.in, "w");
@@ -818,8 +823,9 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 	}
 	fclose(out);
 	ret = finish_command(&cmd);
+	cmd_cleared = 1;
 	if (ret)
-		return ret;
+		goto cleanup;
 
 	if (!names.nr && !po_args.quiet)
 		printf_ln(_("Nothing new to pack."));
@@ -893,7 +899,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 		string_list_clear(&include, 0);
 
 		if (ret)
-			return ret;
+			goto cleanup;
 	}
 
 	reprepare_packed_git(the_repository);
@@ -946,12 +952,15 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 		write_midx_file(get_object_directory(), NULL, NULL, flags);
 	}
 
+cleanup:
 	string_list_clear(&names, 0);
 	string_list_clear(&rollback, 0);
 	string_list_clear(&existing_nonkept_packs, 0);
 	string_list_clear(&existing_kept_packs, 0);
 	clear_pack_geometry(geometry);
 	strbuf_release(&line);
+	if (!cmd_cleared)
+		child_process_clear(&cmd);
 
-	return 0;
+	return ret;
 }
