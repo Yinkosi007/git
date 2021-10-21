@@ -3,6 +3,7 @@
 test_description='multi-pack-indexes'
 . ./test-lib.sh
 
+TEST_PASSES_SANITIZE_LEAK=true
 GIT_TEST_MULTI_PACK_INDEX=0
 objdir=.git/objects
 

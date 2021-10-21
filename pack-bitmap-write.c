@@ -234,6 +234,8 @@ static void bitmap_builder_init(struct bitmap_builder *bb,
 	if (prepare_revision_walk(&revs))
 		die("revision walk setup failed");
 
+	UNLEAK(revs);
+
 	while ((commit = get_revision(&revs))) {
 		struct commit_list *p = commit->parents;
 		struct bb_commit *c_ent;

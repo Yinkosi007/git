@@ -3759,6 +3759,7 @@ static void get_object_list(int ac, const char **av)
 		if (handle_revision_arg(line, &revs, flags, REVARG_CANNOT_BE_FILENAME))
 			die(_("bad revision '%s'"), line);
 	}
+	UNLEAK(revs);
 
 	warn_on_object_refname_ambiguity = save_warning;
 

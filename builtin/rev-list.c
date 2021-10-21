@@ -549,6 +549,8 @@ int cmd_rev_list(int argc, const char **argv, const char *prefix)
 
 	argc = setup_revisions(argc, argv, &revs, &s_r_opt);
 
+	UNLEAK(revs);
+
 	memset(&info, 0, sizeof(info));
 	info.revs = &revs;
 	if (revs.bisect)
