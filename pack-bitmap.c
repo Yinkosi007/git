@@ -1360,25 +1360,6 @@ static void show_objects_for_type(
 	}
 }
 
-static int in_bitmapped_pack(struct bitmap_index *bitmap_git,
-			     struct object_list *roots)
-{
-	while (roots) {
-		struct object *object = roots->item;
-		roots = roots->next;
-
-		if (bitmap_is_midx(bitmap_git)) {
-			if (bsearch_midx(&object->oid, bitmap_git->midx, NULL))
-				return 1;
-		} else {
-			if (find_pack_entry_one(object->oid.hash, bitmap_git->pack) > 0)
-				return 1;
-		}
-	}
-
-	return 0;
-}
-
 static struct bitmap *find_tip_objects(struct bitmap_index *bitmap_git,
 				       struct object_list *tip_objects,
 				       enum object_type type)
@@ -1685,14 +1666,6 @@ struct bitmap_index *prepare_bitmap_walk(struct rev_info *revs,
 		else
 			object_list_insert(object, &wants);
 	}
-
-	/*
-	 * if we have a HAVES list, but none of those haves is contained
-	 * in the packfile that has a bitmap, we don't have anything to
-	 * optimize here
-	 */
-	if (haves && !in_bitmapped_pack(bitmap_git, haves))
-		goto cleanup;
 
 	/* if we don't want anything, we're done here */
 	if (!wants)
