@@ -1147,12 +1147,7 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 	revs->boundary = 0;
 
 	reset_revision_walk();
-
-	for (i = 0; i < revs->uninteresting_commits.nr; i++) {
-		struct object *obj = revs->uninteresting_commits.objects[i].item;
-
-		obj->flags &= ~UNINTERESTING;
-	}
+	clear_object_flags(UNINTERESTING);
 
 	if (boundary.nr) {
 		struct object *obj;
