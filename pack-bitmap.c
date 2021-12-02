@@ -1134,8 +1134,12 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 	 * We didn't have complete coverage of the roots. First OR in any
 	 * bitmaps that are UNINTERESTING between the tips and boundary.
 	 */
+	trace2_region_enter("pack-bitmap", "boundary-prepare", the_repository);
 	if (prepare_revision_walk(revs))
 		die("revision walk setup failed");
+	trace2_region_leave("pack-bitmap", "boundary-prepare", the_repository);
+
+	trace2_region_enter("pack-bitmap", "boundary-load-bitmaps", the_repository);
 	for (i = 0; i < revs->uninteresting_commits.nr; i++) {
 		struct object *obj = revs->uninteresting_commits.objects[i].item;
 		if (obj->type != OBJ_COMMIT)
@@ -1144,10 +1148,12 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 
 		add_commit_to_bitmap(bitmap_git, &base, (struct commit *)obj);
 	}
+	trace2_region_leave("pack-bitmap", "boundary-load-bitmaps", the_repository);
 
 	/*
 	 * Then add the boundary commit(s) as fill-in traversal tips.
 	 */
+	trace2_region_enter("pack-bitmap", "boundary-traverse", the_repository);
 	revs->boundary = 1;
 	traverse_commit_list_filtered(revs,
 				      show_boundary_commit,
@@ -1161,6 +1167,9 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 	reset_revision_walk();
 	clear_object_flags(UNINTERESTING);
 
+	trace2_region_leave("pack-bitmap", "boundary-traverse", the_repository);
+
+	trace2_region_enter("pack-bitmap", "boundary-fill-in", the_repository);
 	if (boundary.nr) {
 		struct object *obj;
 		int needs_walk = 0;
@@ -1181,6 +1190,8 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 		if (needs_walk)
 			base = fill_in_bitmap(bitmap_git, revs, base, NULL);
 	}
+	trace2_region_leave("pack-bitmap", "boundary-fill-in", the_repository);
+
 
 cleanup:
 	revs->ignore_missing_links = 0;
