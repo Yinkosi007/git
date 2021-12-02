@@ -1087,6 +1087,7 @@ static void show_boundary_commit(struct commit *commit, void *data)
 static void show_boundary_object(struct object *object,
 				 const char *name, void *data)
 {
+	BUG("should not be called");
 }
 
 static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
@@ -1097,6 +1098,7 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 	struct object_array boundary = OBJECT_ARRAY_INIT;
 	int any_missing = 0;
 	unsigned int i;
+	int tmp_blobs, tmp_trees, tmp_tags;
 
 	revs->ignore_missing_links = 1;
 	revs->collect_uninteresting = 1;
@@ -1120,6 +1122,13 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 
 	if (!any_missing)
 		goto cleanup;
+
+	tmp_blobs = revs->blob_objects;
+	revs->blob_objects = 0;
+	tmp_trees = revs->tree_objects;
+	revs->tree_objects = 0;
+	tmp_tags = revs->blob_objects;
+	revs->tag_objects = 0;
 
 	/*
 	 * We didn't have complete coverage of the roots. First OR in any
@@ -1145,6 +1154,9 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 				      show_boundary_object,
 				      &boundary, NULL);
 	revs->boundary = 0;
+	revs->blob_objects = tmp_blobs;
+	revs->tree_objects = tmp_trees;
+	revs->tag_objects = tmp_tags;
 
 	reset_revision_walk();
 	clear_object_flags(UNINTERESTING);
