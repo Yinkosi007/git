@@ -1075,6 +1075,19 @@ static struct bitmap *fill_in_bitmap(struct bitmap_index *bitmap_git,
 	return base;
 }
 
+static int obj_in_bitmap(struct bitmap_index *bitmap_git,
+			 struct object *obj, struct bitmap *bitmap)
+{
+	int pos;
+
+	if (!bitmap)
+		return 0;
+	pos = bitmap_position(bitmap_git, &obj->oid);
+	if (pos < 0)
+		return 0;
+	return bitmap_get(bitmap, pos);
+}
+
 static void show_boundary_commit(struct commit *commit, void *data)
 {
 	struct object_array *boundary = data;
@@ -1173,13 +1186,11 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 	if (boundary.nr) {
 		struct object *obj;
 		int needs_walk = 0;
-		int pos;
 
 		for (i = 0; i < boundary.nr; i++) {
 			obj = boundary.objects[i].item;
-			pos = bitmap_position(bitmap_git, &obj->oid);
 
-			if (pos < 0 || base == NULL || !bitmap_get(base, pos)) {
+			if (!obj_in_bitmap(bitmap_git, obj, base)) {
 				add_pending_object(revs, obj, "");
 				needs_walk = 1;
 			} else {
