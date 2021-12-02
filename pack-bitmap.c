@@ -1159,7 +1159,6 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 			pos = bitmap_position(bitmap_git, &obj->oid);
 
 			if (pos < 0 || base == NULL || !bitmap_get(base, pos)) {
-				obj->flags &= ~UNINTERESTING;
 				add_pending_object(revs, obj, "");
 				needs_walk = 1;
 			} else {
