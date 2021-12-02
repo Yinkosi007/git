@@ -1124,6 +1124,7 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 		roots = roots->next;
 
 		if (object->type == OBJ_COMMIT &&
+		    !obj_in_bitmap(bitmap_git, object, base) &&
 		    add_commit_to_bitmap(bitmap_git, &base,
 					 (struct commit *)object)) {
 			object->flags |= SEEN;
@@ -1159,7 +1160,8 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 			BUG("unexpected non-commit %s marked uninteresting",
 			    oid_to_hex(&obj->oid));
 
-		add_commit_to_bitmap(bitmap_git, &base, (struct commit *)obj);
+		if (!obj_in_bitmap(bitmap_git, obj, base))
+			add_commit_to_bitmap(bitmap_git, &base, (struct commit *)obj);
 	}
 	trace2_region_leave("pack-bitmap", "boundary-load-bitmaps", the_repository);
 
