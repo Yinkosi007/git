@@ -753,8 +753,9 @@ test_expect_success 'rename a remote' '
 	(
 		cd four &&
 		git config branch.main.pushRemote origin &&
-		git remote rename origin upstream &&
+		GIT_PROGRESS_DELAY=0 git remote -v rename origin upstream 2>err &&
 		grep "pushRemote" .git/config &&
+		grep "Renaming remote references: 100% (4/4), done" err &&
 		test -z "$(git for-each-ref refs/remotes/origin)" &&
 		test "$(git symbolic-ref refs/remotes/upstream/HEAD)" = "refs/remotes/upstream/main" &&
 		test "$(git rev-parse upstream/main)" = "$(git rev-parse main)" &&
