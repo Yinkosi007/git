@@ -221,6 +221,11 @@ assert_cruft_pack_exists () {
 	done <packs
 }
 
+refute_cruft_packs_exist () {
+	find .git/objects/pack -name "*.mtimes" >mtimes &&
+	test_must_be_empty mtimes
+}
+
 test_expect_success 'gc --cruft generates a cruft pack' '
 	test_when_finished "rm -fr crufts" &&
 	git init crufts &&
@@ -242,6 +247,42 @@ test_expect_success 'gc.cruftPacks=true generates a cruft pack' '
 		prepare_cruft_history &&
 		git -c gc.cruftPacks=true gc &&
 		assert_cruft_pack_exists
+	)
+'
+
+test_expect_success 'feature.experimental=true generates a cruft pack' '
+	git init crufts &&
+	test_when_finished "rm -fr crufts" &&
+	(
+		cd crufts &&
+
+		prepare_cruft_history &&
+		git -c feature.experimental=true gc &&
+		assert_cruft_pack_exists
+	)
+'
+
+test_expect_success 'feature.experimental=false allows explicit cruft packs' '
+	git init crufts &&
+	test_when_finished "rm -fr crufts" &&
+	(
+		cd crufts &&
+
+		prepare_cruft_history &&
+		git -c gc.cruftPacks=true -c feature.experimental=false gc &&
+		assert_cruft_pack_exists
+	)
+'
+
+test_expect_success 'feature.experimental=false avoids cruft packs by default' '
+	git init crufts &&
+	test_when_finished "rm -fr crufts" &&
+	(
+		cd crufts &&
+
+		prepare_cruft_history &&
+		git -c feature.experimental=false gc &&
+		refute_cruft_packs_exist
 	)
 '
 
