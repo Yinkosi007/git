@@ -346,7 +346,7 @@ test_expect_success 'preferred pack change with existing MIDX bitmap' '
 		test_path_is_file $midx &&
 		test_path_is_file $midx-$(midx_checksum $objdir).bitmap &&
 
-		test_must_fail git clone --no-local . clone2
+		git clone --no-local . clone2
 	)
 '
 
