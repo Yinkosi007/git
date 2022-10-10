@@ -162,44 +162,30 @@ static void read_from_stdin(struct shortlog *log)
 	strbuf_release(&oneline);
 }
 
-static void insert_records_from_trailers(struct shortlog *log,
-					 struct strset *dups,
-					 struct commit *commit,
-					 struct pretty_print_context *ctx,
-					 const char *oneline)
+static void insert_records_from_trailer(struct shortlog *log,
+					struct strset *dups,
+					struct strbuf *buf,
+					struct pretty_print_context *ctx,
+					const char *oneline)
 {
-	struct trailer_iterator iter;
-	const char *commit_buffer, *body;
-	struct strbuf ident = STRBUF_INIT;
+	struct strbuf ibuf = STRBUF_INIT;
+	char *bol = buf->buf;
+	char *value;
 
-	/*
-	 * Using format_commit_message("%B") would be simpler here, but
-	 * this saves us copying the message.
-	 */
-	commit_buffer = logmsg_reencode(commit, NULL, ctx->output_encoding);
-	body = strstr(commit_buffer, "\n\n");
-	if (!body)
-		return;
+	while (bol < buf->buf + buf->len) {
+		strbuf_reset(&ibuf);
 
-	trailer_iterator_init(&iter, body);
-	while (trailer_iterator_advance(&iter)) {
-		const char *value = iter.val.buf;
+		value = bol;
+		if (!parse_ident(log, &ibuf, bol))
+			value = ibuf.buf;
 
-		if (!string_list_has_string(&log->trailers, iter.key.buf))
-			continue;
+		if (strset_add(dups, value))
+			insert_one_record(log, value, oneline);
 
-		strbuf_reset(&ident);
-		if (!parse_ident(log, &ident, value))
-			value = ident.buf;
-
-		if (!strset_add(dups, value))
-			continue;
-		insert_one_record(log, value, oneline);
+		bol += strlen(bol) + 1;
 	}
-	trailer_iterator_release(&iter);
 
-	strbuf_release(&ident);
-	unuse_commit_buffer(commit, commit_buffer);
+	strbuf_release(&ibuf);
 }
 
 static void insert_records_from_format(struct shortlog *log,
@@ -216,7 +202,10 @@ static void insert_records_from_format(struct shortlog *log,
 
 		format_commit_message(commit, item->string, &buf, ctx);
 
-		if (strset_add(dups, buf.buf))
+		if (item->util)
+			insert_records_from_trailer(log, dups, &buf, ctx,
+						    oneline);
+		else if (strset_add(dups, buf.buf))
 			insert_one_record(log, buf.buf, oneline);
 	}
 
@@ -244,9 +233,6 @@ void shortlog_add_commit(struct shortlog *log, struct commit *commit)
 	}
 	oneline_str = oneline.len ? oneline.buf : "<none>";
 
-	if (log->groups & SHORTLOG_GROUP_TRAILER) {
-		insert_records_from_trailers(log, &dups, commit, &ctx, oneline_str);
-	}
 	insert_records_from_format(log, &dups, commit, &ctx, oneline_str);
 
 	strset_clear(&dups);
@@ -317,15 +303,17 @@ static int parse_group_option(const struct option *opt, const char *arg, int uns
 
 	if (unset) {
 		log->groups = 0;
-		string_list_clear(&log->trailers, 0);
 		string_list_clear(&log->format, 0);
 	} else if (!strcasecmp(arg, "author"))
 		log->groups |= SHORTLOG_GROUP_AUTHOR;
 	else if (!strcasecmp(arg, "committer"))
 		log->groups |= SHORTLOG_GROUP_COMMITTER;
 	else if (skip_prefix(arg, "trailer:", &field)) {
+		struct strbuf buf = STRBUF_INIT;
 		log->groups |= SHORTLOG_GROUP_TRAILER;
-		string_list_append(&log->trailers, field);
+		strbuf_addf(&buf, "%%(trailers:key=%s,valueonly=true,separator=%%x00)", field);
+		string_list_append(&log->format, buf.buf)->util = (void*)1;
+		strbuf_release(&buf);
 	} else if (strchrnul(arg, '%')) {
 		log->groups |= SHORTLOG_GROUP_FORMAT;
 		string_list_append(&log->format, arg);
@@ -347,8 +335,6 @@ void shortlog_init(struct shortlog *log)
 	log->wrap = DEFAULT_WRAPLEN;
 	log->in1 = DEFAULT_INDENT1;
 	log->in2 = DEFAULT_INDENT2;
-	log->trailers.strdup_strings = 1;
-	log->trailers.cmp = strcasecmp;
 	log->format.strdup_strings = 1;
 }
 
@@ -433,8 +419,6 @@ parse_done:
 	log.date_mode = rev.date_mode;
 
 	shortlog_init_group(&log);
-
-	string_list_sort(&log.trailers);
 
 	/* assume HEAD if from a tty */
 	if (!nongit && !rev.pending.nr && isatty(0))

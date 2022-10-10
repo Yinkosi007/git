@@ -24,7 +24,6 @@ struct shortlog {
 		SHORTLOG_GROUP_TRAILER = (1 << 2),
 		SHORTLOG_GROUP_FORMAT = (1 << 3),
 	} groups;
-	struct string_list trailers;
 	struct string_list format;
 
 	int email;
