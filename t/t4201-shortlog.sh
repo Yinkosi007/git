@@ -237,6 +237,15 @@ test_expect_success 'shortlog --group=trailer:signed-off-by' '
 	test_cmp expect actual
 '
 
+test_expect_success 'shortlog --group=<format>' '
+	git shortlog -s --date="format:%Y" --group="%cN (%cd)" HEAD >actual &&
+	cat >expect <<-\EOF &&
+	     4	C O Mitter (2005)
+	     1	Sin Nombre (2005)
+	EOF
+	test_cmp expect actual
+'
+
 test_expect_success 'trailer idents are split' '
 	cat >expect <<-\EOF &&
 	     2	C O Mitter
