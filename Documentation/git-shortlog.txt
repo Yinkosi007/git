@@ -108,6 +108,8 @@ options or the revision range, when confusion arises.
 :git-shortlog: 1
 include::rev-list-options.txt[]
 
+include::date-options.txt[]
+
 MAPPING AUTHORS
 ---------------
 
