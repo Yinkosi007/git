@@ -244,6 +244,36 @@ test_expect_success 'shortlog --group=trailer:signed-off-by' '
 	test_cmp expect actual
 '
 
+test_expect_success 'shortlog --group=format' '
+	git shortlog -s --date="format:%Y" --group="format:%cN (%cd)" \
+		HEAD >actual &&
+	cat >expect <<-\EOF &&
+	     4	C O Mitter (2005)
+	     1	Sin Nombre (2005)
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'shortlog --group=<format> DWIM' '
+	git shortlog -s --date="format:%Y" --group="%cN (%cd)" HEAD >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'shortlog multiple --group=format' '
+	git shortlog -s --date="format:%Y" --group="format:%cN (%cd)" \
+		HEAD >actual &&
+	cat >expect <<-\EOF &&
+	     4	C O Mitter (2005)
+	     1	Sin Nombre (2005)
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'shortlog bogus --group' '
+	test_must_fail git shortlog --group=bogus HEAD 2>err &&
+	grep "unknown group type" err
+'
+
 test_expect_success 'trailer idents are split' '
 	cat >expect <<-\EOF &&
 	     2	C O Mitter
@@ -323,6 +353,20 @@ test_expect_success 'shortlog can match multiple groups' '
 		--group=trailer:some-trailer \
 		--group=trailer:another-trailer \
 		-2 HEAD >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'shortlog can match multiple format groups' '
+	cat >expect <<-\EOF &&
+	     2	User B <b@example.com>
+	     1	A U Thor <author@example.com>
+	     1	User A <a@example.com>
+	EOF
+	git shortlog -ns \
+		--group="%(trailers:valueonly,key=some-trailer)" \
+		--group="%(trailers:valueonly,key=another-trailer)" \
+		-2 HEAD >actual.raw &&
+	grep -v "^$" actual.raw >actual &&
 	test_cmp expect actual
 '
 
