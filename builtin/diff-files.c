@@ -76,7 +76,7 @@ int cmd_diff_files(int argc, const char **argv, const char *prefix)
 	    (rev.diffopt.output_format & DIFF_FORMAT_PATCH))
 		diff_merges_set_dense_combined_if_unset(&rev);
 
-	if (read_cache_preload(&rev.diffopt.pathspec) < 0) {
+	if (repo_read_index_preload(the_repository, &rev.diffopt.pathspec, 0) < 0) {
 		perror("read_cache_preload");
 		result = -1;
 		goto cleanup;
