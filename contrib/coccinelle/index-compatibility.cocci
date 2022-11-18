@@ -1,3 +1,30 @@
+// the_index.* variables
+@@
+@@
+(
+- active_cache
++ the_index.cache
+|
+- active_cache_changed
++ the_index.cache_changed
+)
+
+@@
+identifier f != prepare_to_commit;
+@@
+  f(...) {<...
+- active_nr
++ the_index.cache_nr
+  ...>}
+
+@@
+identifier f != cmd_read_tree;
+@@
+  f(...) {<...
+- active_cache_tree
++ the_index.cache_tree
+  ...>}
+
 // "the_repository" simple cases
 @@
 @@
