@@ -231,7 +231,7 @@ static int checkout_stage(int stage, const struct cache_entry *ce, int pos,
 		pos++;
 	}
 	if (!overlay_mode) {
-		unlink_entry(ce);
+		unlink_entry(ce, NULL);
 		return 0;
 	}
 	if (stage == 2)

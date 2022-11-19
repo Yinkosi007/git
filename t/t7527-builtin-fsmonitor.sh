@@ -866,30 +866,11 @@ test_expect_success 'submodule always visited' '
 # the submodule, and someone does a `git submodule absorbgitdirs`
 # in the super, Git will recursively invoke `git submodule--helper`
 # to do the work and this may try to read the index.  This will
-# try to start the daemon in the submodule *and* pass (either
-# directly or via inheritance) the `--super-prefix` arg to the
-# `git fsmonitor--daemon start` command inside the submodule.
-# This causes a warning because fsmonitor--daemon does take that
-# global arg (see the table in git.c)
-#
-# This causes a warning when trying to start the daemon that is
-# somewhat confusing.  It does not seem to hurt anything because
-# the fsmonitor code maps the query failure into a trivial response
-# and does the work anyway.
-#
-# It would be nice to silence the warning, however.
-
-have_t2_error_event () {
-	log=$1
-	msg="fsmonitor--daemon doesnQt support --super-prefix" &&
-
-	tr '\047' Q <$1 | grep -e "$msg"
-}
+# try to start the daemon in the submodule.
 
 test_expect_success "stray submodule super-prefix warning" '
 	test_when_finished "rm -rf super; \
-			    rm -rf sub;   \
-			    rm super-sub.trace" &&
+			    rm -rf sub" &&
 
 	create_super super &&
 	create_sub sub &&
@@ -904,10 +885,12 @@ test_expect_success "stray submodule super-prefix warning" '
 
 	test_path_is_dir super/dir_1/dir_2/sub/.git &&
 
-	GIT_TRACE2_EVENT="$PWD/super-sub.trace" \
-		git -C super submodule absorbgitdirs &&
-
-	! have_t2_error_event super-sub.trace
+	cat >expect <<-\EOF &&
+	Migrating git directory of '\''dir_1/dir_2/sub'\'' from '\''dir_1/dir_2/sub/.git'\'' to '\''.git/modules/dir_1/dir_2/sub'\''
+	EOF
+	git -C super submodule absorbgitdirs >out 2>actual &&
+	test_cmp expect actual &&
+	test_must_be_empty out
 '
 
 # On a case-insensitive file system, confirm that the daemon

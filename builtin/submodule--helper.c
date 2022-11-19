@@ -113,10 +113,9 @@ static char *resolve_relative_url(const char *rel_url, const char *up_path, int 
 }
 
 /* the result should be freed by the caller. */
-static char *get_submodule_displaypath(const char *path, const char *prefix)
+static char *get_submodule_displaypath_sp(const char *path, const char *prefix,
+					  const char *super_prefix)
 {
-	const char *super_prefix = get_super_prefix();
-
 	if (prefix && super_prefix) {
 		BUG("cannot have prefix '%s' and superprefix '%s'",
 		    prefix, super_prefix);
@@ -279,6 +278,7 @@ struct foreach_cb {
 	int argc;
 	const char **argv;
 	const char *prefix;
+	const char *super_prefix;
 	int quiet;
 	int recursive;
 };
@@ -294,7 +294,8 @@ static void runcommand_in_submodule_cb(const struct cache_entry *list_item,
 	struct child_process cp = CHILD_PROCESS_INIT;
 	char *displaypath;
 
-	displaypath = get_submodule_displaypath(path, info->prefix);
+	displaypath = get_submodule_displaypath_sp(path, info->prefix,
+						   info->super_prefix);
 
 	sub = submodule_from_path(the_repository, null_oid(), path);
 
@@ -364,10 +365,10 @@ static void runcommand_in_submodule_cb(const struct cache_entry *list_item,
 		cpr.dir = path;
 		prepare_submodule_repo_env(&cpr.env);
 
-		strvec_pushl(&cpr.args, "--super-prefix", NULL);
-		strvec_pushf(&cpr.args, "%s/", displaypath);
 		strvec_pushl(&cpr.args, "submodule--helper", "foreach", "--recursive",
 			     NULL);
+		strvec_pushl(&cpr.args, "--super-prefix", NULL);
+		strvec_pushf(&cpr.args, "%s/", displaypath);
 
 		if (info->quiet)
 			strvec_push(&cpr.args, "--quiet");
@@ -390,7 +391,9 @@ static int module_foreach(int argc, const char **argv, const char *prefix)
 	struct foreach_cb info = FOREACH_CB_INIT;
 	struct pathspec pathspec = { 0 };
 	struct module_list list = MODULE_LIST_INIT;
+	const char *super_prefix = NULL;
 	struct option module_foreach_options[] = {
+		OPT__SUPER_PREFIX(&super_prefix),
 		OPT__QUIET(&info.quiet, N_("suppress output of entering each submodule command")),
 		OPT_BOOL(0, "recursive", &info.recursive,
 			 N_("recurse into nested submodules")),
@@ -411,6 +414,7 @@ static int module_foreach(int argc, const char **argv, const char *prefix)
 	info.argc = argc;
 	info.argv = argv;
 	info.prefix = prefix;
+	info.super_prefix = super_prefix;
 
 	for_each_listed_submodule(&list, runcommand_in_submodule_cb, &info);
 
@@ -435,11 +439,13 @@ static int starts_with_dot_dot_slash(const char *const path)
 
 struct init_cb {
 	const char *prefix;
+	const char *super_prefix;
 	unsigned int flags;
 };
 #define INIT_CB_INIT { 0 }
 
 static void init_submodule(const char *path, const char *prefix,
+			   const char *super_prefix,
 			   unsigned int flags)
 {
 	const struct submodule *sub;
@@ -447,7 +453,7 @@ static void init_submodule(const char *path, const char *prefix,
 	const char *upd;
 	char *url = NULL, *displaypath;
 
-	displaypath = get_submodule_displaypath(path, prefix);
+	displaypath = get_submodule_displaypath_sp(path, prefix, super_prefix);
 
 	sub = submodule_from_path(the_repository, null_oid(), path);
 
@@ -523,7 +529,8 @@ static void init_submodule_cb(const struct cache_entry *list_item, void *cb_data
 {
 	struct init_cb *info = cb_data;
 
-	init_submodule(list_item->name, info->prefix, info->flags);
+	init_submodule(list_item->name, info->prefix, info->super_prefix,
+		       info->flags);
 }
 
 static int module_init(int argc, const char **argv, const char *prefix)
@@ -570,6 +577,7 @@ cleanup:
 
 struct status_cb {
 	const char *prefix;
+	const char *super_prefix;
 	unsigned int flags;
 };
 #define STATUS_CB_INIT { 0 }
@@ -608,7 +616,7 @@ static int handle_submodule_head_ref(const char *refname UNUSED,
 
 static void status_submodule(const char *path, const struct object_id *ce_oid,
 			     unsigned int ce_flags, const char *prefix,
-			     unsigned int flags)
+			     const char *super_prefix, unsigned int flags)
 {
 	char *displaypath;
 	struct strvec diff_files_args = STRVEC_INIT;
@@ -624,7 +632,7 @@ static void status_submodule(const char *path, const struct object_id *ce_oid,
 		die(_("no submodule mapping found in .gitmodules for path '%s'"),
 		      path);
 
-	displaypath = get_submodule_displaypath(path, prefix);
+	displaypath = get_submodule_displaypath_sp(path, prefix, super_prefix);
 
 	if ((CE_STAGEMASK & ce_flags) >> CE_STAGESHIFT) {
 		print_status(flags, 'U', path, null_oid(), displaypath);
@@ -682,10 +690,10 @@ static void status_submodule(const char *path, const struct object_id *ce_oid,
 		cpr.dir = path;
 		prepare_submodule_repo_env(&cpr.env);
 
-		strvec_push(&cpr.args, "--super-prefix");
-		strvec_pushf(&cpr.args, "%s/", displaypath);
 		strvec_pushl(&cpr.args, "submodule--helper", "status",
 			     "--recursive", NULL);
+		strvec_push(&cpr.args, "--super-prefix");
+		strvec_pushf(&cpr.args, "%s/", displaypath);
 
 		if (flags & OPT_CACHED)
 			strvec_push(&cpr.args, "--cached");
@@ -709,7 +717,7 @@ static void status_submodule_cb(const struct cache_entry *list_item,
 	struct status_cb *info = cb_data;
 
 	status_submodule(list_item->name, &list_item->oid, list_item->ce_flags,
-			 info->prefix, info->flags);
+			 info->prefix, info->super_prefix, info->flags);
 }
 
 static int module_status(int argc, const char **argv, const char *prefix)
@@ -718,7 +726,9 @@ static int module_status(int argc, const char **argv, const char *prefix)
 	struct pathspec pathspec = { 0 };
 	struct module_list list = MODULE_LIST_INIT;
 	int quiet = 0;
+	const char *super_prefix = NULL;
 	struct option module_status_options[] = {
+		OPT__SUPER_PREFIX(&super_prefix),
 		OPT__QUIET(&quiet, N_("suppress submodule status output")),
 		OPT_BIT(0, "cached", &info.flags, N_("use commit stored in the index instead of the one stored in the submodule HEAD"), OPT_CACHED),
 		OPT_BIT(0, "recursive", &info.flags, N_("recurse into nested submodules"), OPT_RECURSIVE),
@@ -737,6 +747,7 @@ static int module_status(int argc, const char **argv, const char *prefix)
 		goto cleanup;
 
 	info.prefix = prefix;
+	info.super_prefix = super_prefix;
 	if (quiet)
 		info.flags |= OPT_QUIET;
 
@@ -787,6 +798,7 @@ struct summary_cb {
 	int argc;
 	const char **argv;
 	const char *prefix;
+	const char *super_prefix;
 	unsigned int cached: 1;
 	unsigned int for_status: 1;
 	unsigned int files: 1;
@@ -948,7 +960,8 @@ static void generate_submodule_summary(struct summary_cb *info,
 		dst_abbrev = xstrndup(oid_to_hex(&p->oid_dst), 7);
 	}
 
-	displaypath = get_submodule_displaypath(p->sm_path, info->prefix);
+	displaypath = get_submodule_displaypath_sp(p->sm_path, info->prefix,
+						   info->super_prefix);
 
 	if (!missing_src && !missing_dst) {
 		struct child_process cp_rev_list = CHILD_PROCESS_INIT;
@@ -1203,12 +1216,13 @@ static int module_summary(int argc, const char **argv, const char *prefix)
 
 struct sync_cb {
 	const char *prefix;
+	const char *super_prefix;
 	unsigned int flags;
 };
 #define SYNC_CB_INIT { 0 }
 
 static void sync_submodule(const char *path, const char *prefix,
-			   unsigned int flags)
+			   const char *super_prefix, unsigned int flags)
 {
 	const struct submodule *sub;
 	char *remote_key = NULL;
@@ -1239,7 +1253,7 @@ static void sync_submodule(const char *path, const char *prefix,
 		super_config_url = xstrdup("");
 	}
 
-	displaypath = get_submodule_displaypath(path, prefix);
+	displaypath = get_submodule_displaypath_sp(path, prefix, super_prefix);
 
 	if (!(flags & OPT_QUIET))
 		printf(_("Synchronizing submodule url for '%s'\n"),
@@ -1276,10 +1290,11 @@ static void sync_submodule(const char *path, const char *prefix,
 		cpr.dir = path;
 		prepare_submodule_repo_env(&cpr.env);
 
-		strvec_push(&cpr.args, "--super-prefix");
-		strvec_pushf(&cpr.args, "%s/", displaypath);
 		strvec_pushl(&cpr.args, "submodule--helper", "sync",
 			     "--recursive", NULL);
+		strvec_push(&cpr.args, "--super-prefix");
+		strvec_pushf(&cpr.args, "%s/", displaypath);
+
 
 		if (flags & OPT_QUIET)
 			strvec_push(&cpr.args, "--quiet");
@@ -1302,7 +1317,8 @@ static void sync_submodule_cb(const struct cache_entry *list_item, void *cb_data
 {
 	struct sync_cb *info = cb_data;
 
-	sync_submodule(list_item->name, info->prefix, info->flags);
+	sync_submodule(list_item->name, info->prefix, info->super_prefix,
+		       info->flags);
 }
 
 static int module_sync(int argc, const char **argv, const char *prefix)
@@ -1312,7 +1328,9 @@ static int module_sync(int argc, const char **argv, const char *prefix)
 	struct module_list list = MODULE_LIST_INIT;
 	int quiet = 0;
 	int recursive = 0;
+	const char *super_prefix = NULL;
 	struct option module_sync_options[] = {
+		OPT__SUPER_PREFIX(&super_prefix),
 		OPT__QUIET(&quiet, N_("suppress output of synchronizing submodule url")),
 		OPT_BOOL(0, "recursive", &recursive,
 			N_("recurse into nested submodules")),
@@ -1331,6 +1349,7 @@ static int module_sync(int argc, const char **argv, const char *prefix)
 		goto cleanup;
 
 	info.prefix = prefix;
+	info.super_prefix = super_prefix;
 	if (quiet)
 		info.flags |= OPT_QUIET;
 	if (recursive)
@@ -1365,7 +1384,7 @@ static void deinit_submodule(const char *path, const char *prefix,
 	if (!sub || !sub->name)
 		goto cleanup;
 
-	displaypath = get_submodule_displaypath(path, prefix);
+	displaypath = get_submodule_displaypath_sp(path, prefix, NULL);
 
 	/* remove the submodule work tree (unless the user already did it) */
 	if (is_directory(path)) {
@@ -1916,6 +1935,7 @@ static void submodule_update_clone_release(struct submodule_update_clone *suc)
 
 struct update_data {
 	const char *prefix;
+	const char *super_prefix;
 	char *displaypath;
 	const char *super_branch;
 	enum submodule_update_type update_default;
@@ -1991,7 +2011,8 @@ static int prepare_to_clone_next_submodule(const struct cache_entry *ce,
 	enum submodule_update_type update_type;
 	char *key;
 	const struct update_data *ud = suc->update_data;
-	char *displaypath = get_submodule_displaypath(ce->name, ud->prefix);
+	char *displaypath = get_submodule_displaypath_sp(ce->name, ud->prefix,
+							 ud->super_prefix);
 	struct strbuf sb = STRBUF_INIT;
 	int needs_cloning = 0;
 	int need_free_url = 0;
@@ -2481,11 +2502,11 @@ static void update_data_to_args(const struct update_data *update_data,
 {
 	enum submodule_update_type update_type = update_data->update_default;
 
+	strvec_pushl(args, "submodule--helper", "update", "--recursive", NULL);
 	if (update_data->displaypath) {
 		strvec_push(args, "--super-prefix");
 		strvec_pushf(args, "%s/", update_data->displaypath);
 	}
-	strvec_pushl(args, "submodule--helper", "update", "--recursive", NULL);
 	strvec_pushf(args, "--jobs=%d", update_data->max_jobs);
 	if (update_data->quiet)
 		strvec_push(args, "--quiet");
@@ -2670,8 +2691,9 @@ static int update_submodules(struct update_data *update_data)
 		if (code)
 			goto fail;
 
-		update_data->displaypath = get_submodule_displaypath(
-			update_data->sm_path, update_data->prefix);
+		update_data->displaypath = get_submodule_displaypath_sp(
+			update_data->sm_path, update_data->prefix,
+			update_data->super_prefix);
 		code = update_submodule(update_data);
 		FREE_AND_NULL(update_data->displaypath);
 fail:
@@ -2696,7 +2718,9 @@ static int module_update(int argc, const char **argv, const char *prefix)
 	struct list_objects_filter_options filter_options =
 		LIST_OBJECTS_FILTER_INIT;
 	int ret;
+	const char *super_prefix = NULL;
 	struct option module_update_options[] = {
+		OPT__SUPER_PREFIX(&super_prefix),
 		OPT__FORCE(&opt.force, N_("force checkout updates"), 0),
 		OPT_BOOL(0, "init", &opt.init,
 			 N_("initialize uninitialized submodules before update")),
@@ -2763,6 +2787,7 @@ static int module_update(int argc, const char **argv, const char *prefix)
 
 	opt.filter_options = &filter_options;
 	opt.prefix = prefix;
+	opt.super_prefix = super_prefix;
 
 	if (opt.update_default)
 		opt.update_strategy.type = opt.update_default;
@@ -2794,6 +2819,7 @@ static int module_update(int argc, const char **argv, const char *prefix)
 			module_list_active(&list);
 
 		info.prefix = opt.prefix;
+		info.super_prefix = super_prefix;
 		if (opt.quiet)
 			info.flags |= OPT_QUIET;
 
@@ -2892,7 +2918,9 @@ static int absorb_git_dirs(int argc, const char **argv, const char *prefix)
 	int i;
 	struct pathspec pathspec = { 0 };
 	struct module_list list = MODULE_LIST_INIT;
+	const char *super_prefix = NULL;
 	struct option embed_gitdir_options[] = {
+		OPT__SUPER_PREFIX(&super_prefix),
 		OPT_END()
 	};
 	const char *const git_submodule_helper_usage[] = {
@@ -2908,7 +2936,8 @@ static int absorb_git_dirs(int argc, const char **argv, const char *prefix)
 		goto cleanup;
 
 	for (i = 0; i < list.nr; i++)
-		absorb_git_dir_into_superproject(list.entries[i]->name);
+		absorb_git_dir_into_superproject_sp(list.entries[i]->name,
+						    super_prefix);
 
 	ret = 0;
 cleanup:
@@ -2940,7 +2969,7 @@ static int module_set_url(int argc, const char **argv, const char *prefix)
 	config_name = xstrfmt("submodule.%s.url", path);
 
 	config_set_in_gitmodules_file_gently(config_name, newurl);
-	sync_submodule(path, prefix, quiet ? OPT_QUIET : 0);
+	sync_submodule(path, prefix, NULL, quiet ? OPT_QUIET : 0);
 
 	free(config_name);
 
@@ -3417,8 +3446,6 @@ cleanup:
 
 int cmd_submodule__helper(int argc, const char **argv, const char *prefix)
 {
-	const char *cmd = argv[0];
-	const char *subcmd;
 	parse_opt_subcommand_fn *fn = NULL;
 	const char *const usage[] = {
 		N_("git submodule--helper <command>"),
@@ -3442,18 +3469,6 @@ int cmd_submodule__helper(int argc, const char **argv, const char *prefix)
 		OPT_END()
 	};
 	argc = parse_options(argc, argv, prefix, options, usage, 0);
-	subcmd = argv[0];
-
-	if (strcmp(subcmd, "clone") && strcmp(subcmd, "update") &&
-	    strcmp(subcmd, "foreach") && strcmp(subcmd, "status") &&
-	    strcmp(subcmd, "sync") && strcmp(subcmd, "absorbgitdirs") &&
-	    get_super_prefix())
-		/*
-		 * xstrfmt() rather than "%s %s" to keep the translated
-		 * string identical to git.c's.
-		 */
-		die(_("%s doesn't support --super-prefix"),
-		    xstrfmt("'%s %s'", cmd, subcmd));
 
 	return fn(argc, argv, prefix);
 }
