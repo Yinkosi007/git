@@ -1,4 +1,3 @@
-#define USE_THE_INDEX_COMPATIBILITY_MACROS
 #include "cache.h"
 #include "config.h"
 #include "diff.h"
@@ -62,11 +61,11 @@ int cmd_diff_index(int argc, const char **argv, const char *prefix)
 		usage(diff_cache_usage);
 	if (!(option & DIFF_INDEX_CACHED)) {
 		setup_work_tree();
-		if (read_cache_preload(&rev.diffopt.pathspec) < 0) {
+		if (repo_read_index_preload(the_repository, &rev.diffopt.pathspec, 0) < 0) {
 			perror("read_cache_preload");
 			return -1;
 		}
-	} else if (read_cache() < 0) {
+	} else if (repo_read_index(the_repository) < 0) {
 		perror("read_cache");
 		return -1;
 	}

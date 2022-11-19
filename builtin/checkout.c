@@ -150,7 +150,7 @@ static int update_some(const struct object_id *oid, struct strbuf *base,
 	 */
 	pos = cache_name_pos(ce->name, ce->ce_namelen);
 	if (pos >= 0) {
-		struct cache_entry *old = active_cache[pos];
+		struct cache_entry *old = the_index.cache[pos];
 		if (ce->ce_mode == old->ce_mode &&
 		    !ce_intent_to_add(old) &&
 		    oideq(&ce->oid, &old->oid)) {
@@ -160,7 +160,8 @@ static int update_some(const struct object_id *oid, struct strbuf *base,
 		}
 	}
 
-	add_cache_entry(ce, ADD_CACHE_OK_TO_ADD | ADD_CACHE_OK_TO_REPLACE);
+	add_index_entry(&the_index, ce,
+			ADD_CACHE_OK_TO_ADD | ADD_CACHE_OK_TO_REPLACE);
 	return 0;
 }
 
@@ -178,8 +179,8 @@ static int read_tree_some(struct tree *tree, const struct pathspec *pathspec)
 
 static int skip_same_name(const struct cache_entry *ce, int pos)
 {
-	while (++pos < active_nr &&
-	       !strcmp(active_cache[pos]->name, ce->name))
+	while (++pos < the_index.cache_nr &&
+	       !strcmp(the_index.cache[pos]->name, ce->name))
 		; /* skip */
 	return pos;
 }
@@ -187,9 +188,9 @@ static int skip_same_name(const struct cache_entry *ce, int pos)
 static int check_stage(int stage, const struct cache_entry *ce, int pos,
 		       int overlay_mode)
 {
-	while (pos < active_nr &&
-	       !strcmp(active_cache[pos]->name, ce->name)) {
-		if (ce_stage(active_cache[pos]) == stage)
+	while (pos < the_index.cache_nr &&
+	       !strcmp(the_index.cache[pos]->name, ce->name)) {
+		if (ce_stage(the_index.cache[pos]) == stage)
 			return 0;
 		pos++;
 	}
@@ -206,8 +207,8 @@ static int check_stages(unsigned stages, const struct cache_entry *ce, int pos)
 	unsigned seen = 0;
 	const char *name = ce->name;
 
-	while (pos < active_nr) {
-		ce = active_cache[pos];
+	while (pos < the_index.cache_nr) {
+		ce = the_index.cache[pos];
 		if (strcmp(name, ce->name))
 			break;
 		seen |= (1 << ce_stage(ce));
@@ -223,10 +224,10 @@ static int checkout_stage(int stage, const struct cache_entry *ce, int pos,
 			  const struct checkout *state, int *nr_checkouts,
 			  int overlay_mode)
 {
-	while (pos < active_nr &&
-	       !strcmp(active_cache[pos]->name, ce->name)) {
-		if (ce_stage(active_cache[pos]) == stage)
-			return checkout_entry(active_cache[pos], state,
+	while (pos < the_index.cache_nr &&
+	       !strcmp(the_index.cache[pos]->name, ce->name)) {
+		if (ce_stage(the_index.cache[pos]) == stage)
+			return checkout_entry(the_index.cache[pos], state,
 					      NULL, nr_checkouts);
 		pos++;
 	}
@@ -243,7 +244,7 @@ static int checkout_stage(int stage, const struct cache_entry *ce, int pos,
 static int checkout_merged(int pos, const struct checkout *state,
 			   int *nr_checkouts, struct mem_pool *ce_mem_pool)
 {
-	struct cache_entry *ce = active_cache[pos];
+	struct cache_entry *ce = the_index.cache[pos];
 	const char *path = ce->name;
 	mmfile_t ancestor, ours, theirs;
 	enum ll_merge_result merge_status;
@@ -256,7 +257,7 @@ static int checkout_merged(int pos, const struct checkout *state,
 	int renormalize = 0;
 
 	memset(threeway, 0, sizeof(threeway));
-	while (pos < active_nr) {
+	while (pos < the_index.cache_nr) {
 		int stage;
 		stage = ce_stage(ce);
 		if (!stage || strcmp(path, ce->name))
@@ -265,7 +266,7 @@ static int checkout_merged(int pos, const struct checkout *state,
 		if (stage == 2)
 			mode = create_ce_mode(ce->ce_mode);
 		pos++;
-		ce = active_cache[pos];
+		ce = the_index.cache[pos];
 	}
 	if (is_null_oid(&threeway[1]) || is_null_oid(&threeway[2]))
 		return error(_("path '%s' does not have necessary versions"), path);
@@ -391,8 +392,8 @@ static int checkout_worktree(const struct checkout_opts *opts,
 	if (pc_workers > 1)
 		init_parallel_checkout();
 
-	for (pos = 0; pos < active_nr; pos++) {
-		struct cache_entry *ce = active_cache[pos];
+	for (pos = 0; pos < the_index.cache_nr; pos++) {
+		struct cache_entry *ce = the_index.cache[pos];
 		if (ce->ce_flags & CE_MATCHED) {
 			if (!ce_stage(ce)) {
 				errs |= checkout_entry(ce, &state,
@@ -540,13 +541,13 @@ static int checkout_paths(const struct checkout_opts *opts,
 	 * Make sure all pathspecs participated in locating the paths
 	 * to be checked out.
 	 */
-	for (pos = 0; pos < active_nr; pos++)
+	for (pos = 0; pos < the_index.cache_nr; pos++)
 		if (opts->overlay_mode)
-			mark_ce_for_checkout_overlay(active_cache[pos],
+			mark_ce_for_checkout_overlay(the_index.cache[pos],
 						     ps_matched,
 						     opts);
 		else
-			mark_ce_for_checkout_no_overlay(active_cache[pos],
+			mark_ce_for_checkout_no_overlay(the_index.cache[pos],
 							ps_matched,
 							opts);
 
@@ -561,8 +562,8 @@ static int checkout_paths(const struct checkout_opts *opts,
 		unmerge_marked_index(&the_index);
 
 	/* Any unmerged paths? */
-	for (pos = 0; pos < active_nr; pos++) {
-		const struct cache_entry *ce = active_cache[pos];
+	for (pos = 0; pos < the_index.cache_nr; pos++) {
+		const struct cache_entry *ce = the_index.cache[pos];
 		if (ce->ce_flags & CE_MATCHED) {
 			if (!ce_stage(ce))
 				continue;
@@ -722,7 +723,7 @@ static void init_topts(struct unpack_trees_options *topts, int merge,
 
 	setup_unpack_trees_porcelain(topts, "checkout");
 
-	topts->initial_checkout = is_cache_unborn();
+	topts->initial_checkout = is_index_unborn(&the_index);
 	topts->update = 1;
 	topts->merge = 1;
 	topts->quiet = merge && old_commit;
@@ -744,7 +745,7 @@ static int merge_working_tree(const struct checkout_opts *opts,
 	if (read_cache_preload(NULL) < 0)
 		return error(_("index file corrupt"));
 
-	resolve_undo_clear();
+	resolve_undo_clear_index(&the_index);
 	if (opts->new_orphan_branch && opts->orphan_from_empty_tree) {
 		if (new_branch_info->commit)
 			BUG("'switch --orphan' should never accept a commit as starting point");
@@ -763,7 +764,7 @@ static int merge_working_tree(const struct checkout_opts *opts,
 
 		refresh_cache(REFRESH_QUIET);
 
-		if (unmerged_cache()) {
+		if (unmerged_index(&the_index)) {
 			error(_("you need to resolve your current index first"));
 			return 1;
 		}
@@ -867,7 +868,7 @@ static int merge_working_tree(const struct checkout_opts *opts,
 		}
 	}
 
-	if (!cache_tree_fully_valid(active_cache_tree))
+	if (!cache_tree_fully_valid(the_index.cache_tree))
 		cache_tree_update(&the_index, WRITE_TREE_SILENT | WRITE_TREE_REPAIR);
 
 	if (write_locked_index(&the_index, &lock_file, COMMIT_LOCK))
