@@ -13,6 +13,7 @@
 #include "builtin.h"
 #include "parse-options.h"
 #include "pathspec.h"
+#include <stdio.h>
 
 static int line_termination = '\n';
 #define LS_RECURSIVE 1
@@ -24,15 +25,18 @@ static struct pathspec pathspec;
 static int chomp_prefix;
 static const char *ls_tree_prefix;
 static const char *format;
+static const char *pattern;
+static regex_t *regex;
 struct show_tree_data {
 	unsigned mode;
 	enum object_type type;
 	const struct object_id *oid;
 	const char *pathname;
 	struct strbuf *base;
+	char *size_text;
 };
 
-static const  char * const ls_tree_usage[] = {
+static const char * const ls_tree_usage[] = {
 	N_("git ls-tree [<options>] <tree-ish> [<path>...]"),
 	NULL
 };
@@ -44,6 +48,32 @@ static enum ls_tree_cmdmode {
 	MODE_NAME_STATUS,
 	MODE_OBJECT_ONLY,
 } cmdmode;
+
+static int match_pattern(const char *line)
+{
+	int ret = 0;
+	regmatch_t m[1];
+	char errbuf[64];
+
+	if (!regex) {
+		regex = xmalloc(sizeof(*regex));
+		ret = regcomp(regex, pattern, 0);
+		if (ret) {
+			regerror(ret, regex, errbuf, sizeof(errbuf));
+			die("failed regcomp() for pattern '%s' (%s)", pattern, errbuf);
+		}
+	}
+
+	ret = regexec(regex, line, 1, m, 0);
+	if (ret) {
+		if (ret == REG_NOMATCH)
+			return ret;
+		regerror(ret, regex, errbuf, sizeof(errbuf));
+		die("failed regexec() for subject '%s' (%s)", line, errbuf);
+	}
+
+	return ret;
+}
 
 static void expand_objectsize(struct strbuf *line, const struct object_id *oid,
 			      const enum object_type type, unsigned int padded)
@@ -166,8 +196,12 @@ static int show_tree_fmt(const struct object_id *oid, struct strbuf *base,
 
 	baselen = base->len;
 	strbuf_expand(&sb, format, expand_show_tree, &data);
-	strbuf_addch(&sb, line_termination);
-	fwrite(sb.buf, sb.len, 1, stdout);
+
+	if (!pattern || !match_pattern(sb.buf)) {
+		strbuf_addch(&sb, line_termination);
+		fwrite(sb.buf, sb.len, 1, stdout);
+	}
+
 	strbuf_release(&sb);
 	strbuf_setlen(base, baselen);
 	return recurse;
@@ -186,6 +220,7 @@ static int show_tree_common(struct show_tree_data *data, int *recurse,
 	data->oid = oid;
 	data->pathname = pathname;
 	data->base = base;
+	data->size_text = NULL;
 
 	if (type == OBJ_BLOB) {
 		if (ls_options & LS_TREE_ONLY)
@@ -200,15 +235,36 @@ static int show_tree_common(struct show_tree_data *data, int *recurse,
 	return ret;
 }
 
-static void show_tree_common_default_long(struct strbuf *base,
-					  const char *pathname,
-					  const size_t baselen)
+static void show_tree_common_default_long(struct show_tree_data *data)
 {
-	strbuf_addstr(base, pathname);
-	write_name_quoted_relative(base->buf,
-				   chomp_prefix ? ls_tree_prefix : NULL, stdout,
-				   line_termination);
-	strbuf_setlen(base, baselen);
+	int base_len = data->base->len;
+	struct strbuf sb = STRBUF_INIT;
+	int sb_len = 0;
+
+	if (data->size_text)
+		strbuf_addf(&sb, "%06o %s %s %7s\t", data->mode,
+			    type_name(data->type),
+			    find_unique_abbrev(data->oid, abbrev),
+			    data->size_text);
+	else
+		strbuf_addf(&sb, "%06o %s %s\t", data->mode,
+			    type_name(data->type),
+			    find_unique_abbrev(data->oid, abbrev));
+
+	strbuf_addstr(data->base, data->pathname);
+	sb_len = sb.len;
+	strbuf_addbuf(&sb, data->base);
+
+	if (!pattern || !match_pattern(sb.buf)) {
+		strbuf_setlen(&sb, sb_len);
+		printf("%s", sb.buf);
+		write_name_quoted_relative(data->base->buf,
+					   chomp_prefix ? ls_tree_prefix : NULL,
+					   stdout, line_termination);
+	}
+	strbuf_setlen(data->base, base_len);
+
+	strbuf_release(&sb);
 }
 
 static int show_tree_default(const struct object_id *oid, struct strbuf *base,
@@ -223,9 +279,7 @@ static int show_tree_default(const struct object_id *oid, struct strbuf *base,
 	if (early >= 0)
 		return early;
 
-	printf("%06o %s %s\t", data.mode, type_name(data.type),
-	       find_unique_abbrev(data.oid, abbrev));
-	show_tree_common_default_long(base, pathname, data.base->len);
+	show_tree_common_default_long(&data);
 	return recurse;
 }
 
@@ -253,9 +307,8 @@ static int show_tree_long(const struct object_id *oid, struct strbuf *base,
 		xsnprintf(size_text, sizeof(size_text), "-");
 	}
 
-	printf("%06o %s %s %7s\t", data.mode, type_name(data.type),
-	       find_unique_abbrev(data.oid, abbrev), size_text);
-	show_tree_common_default_long(base, pathname, data.base->len);
+	data.size_text = size_text;
+	show_tree_common_default_long(&data);
 	return recurse;
 }
 
@@ -273,9 +326,11 @@ static int show_tree_name_only(const struct object_id *oid, struct strbuf *base,
 		return early;
 
 	strbuf_addstr(base, pathname);
-	write_name_quoted_relative(base->buf,
-				   chomp_prefix ? ls_tree_prefix : NULL,
-				   stdout, line_termination);
+	if (!pattern || !match_pattern(base->buf)) {
+		write_name_quoted_relative(base->buf,
+					   chomp_prefix ? ls_tree_prefix : NULL,
+					   stdout, line_termination);
+	}
 	strbuf_setlen(base, baselen);
 	return recurse;
 }
@@ -287,12 +342,14 @@ static int show_tree_object(const struct object_id *oid, struct strbuf *base,
 	int early;
 	int recurse;
 	struct show_tree_data data = { 0 };
+	const char *oid_text = find_unique_abbrev(oid, abbrev);
 
 	early = show_tree_common(&data, &recurse, oid, base, pathname, mode);
 	if (early >= 0)
 		return early;
 
-	printf("%s%c", find_unique_abbrev(oid, abbrev), line_termination);
+	if (!pattern || !match_pattern(oid_text))
+		printf("%s%c", oid_text, line_termination);
 	return recurse;
 }
 
@@ -358,8 +415,10 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
 			 N_("list entire tree; not just current directory "
 			    "(implies --full-name)")),
 		OPT_STRING_F(0, "format", &format, N_("format"),
-					 N_("format to use for the output"),
-					 PARSE_OPT_NONEG),
+			     N_("format to use for the output"),
+			     PARSE_OPT_NONEG),
+		OPT_STRING(0, "pattern", &pattern, "pattern",
+			   "pattern to use to match the output"),
 		OPT__ABBREV(&abbrev),
 		OPT_END()
 	};
@@ -397,10 +456,12 @@ int cmd_ls_tree(int argc, const char **argv, const char *prefix)
 		usage_with_options(ls_tree_usage, ls_tree_options);
 	if (get_oid(argv[0], &oid))
 		die("Not a valid object name %s", argv[0]);
+	if (pattern && !strlen(pattern))
+		die("Not a valid pattern, the value is empty");
 
 	/*
 	 * show_recursive() rolls its own matching code and is
-	 * generally ignorant of 'struct pathspec'. The magic mask
+	 * generally ignorant f 'struct pathspec'. The magic mask
 	 * cannot be lifted until it is converted to use
 	 * match_pathspec() or tree_entry_interesting()
 	 */
