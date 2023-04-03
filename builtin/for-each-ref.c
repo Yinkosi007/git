@@ -5,6 +5,7 @@
 #include "object.h"
 #include "parse-options.h"
 #include "ref-filter.h"
+#include "strvec.h"
 
 static char const * const for_each_ref_usage[] = {
 	N_("git for-each-ref [<options>] [<pattern>]"),
@@ -19,6 +20,7 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 	int i;
 	struct ref_sorting *sorting;
 	struct string_list sorting_options = STRING_LIST_INIT_DUP;
+	struct strvec exclude_patterns = STRVEC_INIT;
 	int maxcount = 0, icase = 0;
 	struct ref_array array;
 	struct ref_filter filter;
@@ -49,6 +51,9 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 		OPT_CONTAINS(&filter.with_commit, N_("print only refs which contain the commit")),
 		OPT_NO_CONTAINS(&filter.no_commit, N_("print only refs which don't contain the commit")),
 		OPT_BOOL(0, "ignore-case", &icase, N_("sorting and filtering are case insensitive")),
+		OPT_STRVEC(0, "exclude", &exclude_patterns,
+			   N_("pattern"),
+			   N_("exclude refs which match pattern from results")),
 		OPT_END(),
 	};
 
@@ -76,6 +81,7 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 	filter.ignore_case = icase;
 
 	filter.name_patterns = argv;
+	filter.exclude_patterns = exclude_patterns.v;
 	filter.match_as_path = 1;
 	filter_refs(&array, &filter, FILTER_REFS_ALL);
 	ref_array_sort(sorting, &array);
@@ -96,6 +102,7 @@ int cmd_for_each_ref(int argc, const char **argv, const char *prefix)
 	ref_array_clear(&array);
 	free_commit_list(filter.with_commit);
 	free_commit_list(filter.no_commit);
+	strvec_clear(&exclude_patterns);
 	ref_sorting_release(sorting);
 	return 0;
 }

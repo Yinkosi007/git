@@ -51,6 +51,7 @@ struct ref_array {
 
 struct ref_filter {
 	const char **name_patterns;
+	const char **exclude_patterns;
 	struct oid_array points_at;
 	struct commit_list *with_commit;
 	struct commit_list *no_commit;

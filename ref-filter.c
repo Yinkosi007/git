@@ -2071,6 +2071,7 @@ static int get_ref_atom_value(struct ref_array_item *ref, int atom,
 static int match_pattern(const struct ref_filter *filter, const char *refname)
 {
 	const char **patterns = filter->name_patterns;
+	const char **exclude_pattern = filter->exclude_patterns;
 	unsigned flags = 0;
 
 	if (filter->ignore_case)
@@ -2084,6 +2085,11 @@ static int match_pattern(const struct ref_filter *filter, const char *refname)
 	       skip_prefix(refname, "refs/heads/", &refname) ||
 	       skip_prefix(refname, "refs/remotes/", &refname) ||
 	       skip_prefix(refname, "refs/", &refname));
+
+	for (; *exclude_pattern; exclude_pattern++) {
+		if (!wildmatch(*exclude_pattern, refname, flags))
+			return 0;
+	}
 
 	for (; *patterns; patterns++) {
 		if (!wildmatch(*patterns, refname, flags))
@@ -2119,10 +2125,16 @@ static int match_name_as_path_1(const char *pattern, const char *refname,
 static int match_name_as_path(const struct ref_filter *filter, const char *refname)
 {
 	const char **pattern = filter->name_patterns;
+	const char **exclude_pattern = filter->exclude_patterns;
 	unsigned flags = WM_PATHNAME;
 
 	if (filter->ignore_case)
 		flags |= WM_CASEFOLD;
+
+	for (; *exclude_pattern; exclude_pattern++) {
+		if (match_name_as_path_1(*exclude_pattern, refname, flags))
+			return 0;
+	}
 
 	for (; *pattern; pattern++) {
 		if (match_name_as_path_1(*pattern, refname, flags))
@@ -2134,8 +2146,14 @@ static int match_name_as_path(const struct ref_filter *filter, const char *refna
 /* Return 1 if the refname matches one of the patterns, otherwise 0. */
 static int filter_pattern_match(struct ref_filter *filter, const char *refname)
 {
-	if (!*filter->name_patterns)
-		return 1; /* No pattern always matches */
+	if (!(*filter->name_patterns || *filter->exclude_patterns)) {
+		/*
+		 * No patterns means that every reference matches
+		 * trivially, so long as there are also no exclude
+		 * patterns.
+		 */
+		return 1;
+	}
 	if (filter->match_as_path)
 		return match_name_as_path(filter, refname);
 	return match_pattern(filter, refname);
