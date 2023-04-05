@@ -2193,6 +2193,7 @@ static int for_each_fullref_in_pattern(struct ref_filter *filter,
 
 	return refs_for_each_fullref_in_prefixes(get_main_ref_store(the_repository),
 						 NULL, filter->name_patterns,
+						 filter->exclude_patterns,
 						 cb, cb_data);
 }
 

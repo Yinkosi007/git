@@ -933,9 +933,53 @@ static struct ref_iterator_vtable packed_ref_iterator_vtable = {
 	.abort = packed_ref_iterator_abort
 };
 
+struct excluded_range {
+	const char *from;
+	const char *to;
+
+	struct excluded_range *next;
+};
+
+static void populate_excluded_skip_list(struct packed_ref_iterator *iter,
+					struct snapshot *snapshot,
+					const char **excluded_patterns)
+{
+	const char *pattern;
+	const char *start, *end;
+	struct excluded_range *range;
+
+	CALLOC_ARRAY(range, 1);
+
+	for (pattern = *excluded_patterns; pattern; pattern++) {
+		start = find_reference_location(snapshot, pattern, 0);
+		end = find_reference_location_end(snapshot, pattern, 0);
+
+		if (range.start <= start && start < range.end) {
+			/*
+			 * If "pattern" overlaps the last excluded
+			 * pattern (i.e., the start of the current
+			 * excluded range is somewhere between the start
+			 * and the end of the last excluded range),
+			 * extend the range to cover the new end.
+			 */
+			range.end = end;
+		} else {
+			/*
+			 * Otherwise, they are disjoint, so create a new
+			 * range.
+			 */
+			range.start = start;
+			range.end = end;
+		}
+
+
+	}
+}
+
 static struct ref_iterator *packed_ref_iterator_begin(
 		struct ref_store *ref_store,
-		const char *prefix, unsigned int flags)
+		const char *prefix, const char **exclude_patterns,
+		unsigned int flags)
 {
 	struct packed_ref_store *refs;
 	struct snapshot *snapshot;
@@ -971,6 +1015,9 @@ static struct ref_iterator *packed_ref_iterator_begin(
 	CALLOC_ARRAY(iter, 1);
 	ref_iterator = &iter->base;
 	base_ref_iterator_init(ref_iterator, &packed_ref_iterator_vtable, 1);
+
+	if (exclude_patterns)
+		populate_excluded_skip_list(iter, snapshot, exclude_patterns);
 
 	iter->snapshot = snapshot;
 	acquire_snapshot(snapshot);
@@ -1165,7 +1212,7 @@ static int write_with_updates(struct packed_ref_store *refs,
 	 * list of refs is exhausted, set iter to NULL. When the list
 	 * of updates is exhausted, leave i set to updates->nr.
 	 */
-	iter = packed_ref_iterator_begin(&refs->base, "",
+	iter = packed_ref_iterator_begin(&refs->base, "", NULL,
 					 DO_FOR_EACH_INCLUDE_BROKEN);
 	if ((ok = ref_iterator_advance(iter)) != ITER_OK)
 		iter = NULL;

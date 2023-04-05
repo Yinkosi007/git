@@ -352,10 +352,15 @@ int for_each_fullref_in(const char *prefix, each_ref_fn fn, void *cb_data);
  * iterate all refs in "patterns" by partitioning patterns into disjoint sets
  * and iterating the longest-common prefix of each set.
  *
+ * references matching any pattern in "exclude_patterns" are omitted from the
+ * result set.
+ *
  * callers should be prepared to ignore references that they did not ask for.
  */
 int refs_for_each_fullref_in_prefixes(struct ref_store *refs,
-				      const char *namespace, const char **patterns,
+				      const char *namespace,
+				      const char **patterns,
+				      const char **exclude_patterns,
 				      each_ref_fn fn, void *cb_data);
 
 /**
