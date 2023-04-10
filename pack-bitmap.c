@@ -477,13 +477,14 @@ static int load_reverse_index(struct bitmap_index *bitmap_git)
 		 * since we will need to make use of them in pack-objects.
 		 */
 		for (i = 0; i < bitmap_git->midx->num_packs; i++) {
-			ret = load_pack_revindex(bitmap_git->midx->packs[i]);
+			ret = load_pack_revindex(the_repository,
+						 bitmap_git->midx->packs[i]);
 			if (ret)
 				return ret;
 		}
 		return 0;
 	}
-	return load_pack_revindex(bitmap_git->pack);
+	return load_pack_revindex(the_repository, bitmap_git->pack);
 }
 
 static int load_bitmap(struct bitmap_index *bitmap_git)
