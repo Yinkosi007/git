@@ -73,6 +73,21 @@ int cmd__string_list(int argc, const char **argv)
 		return 0;
 	}
 
+	if (argc == 5 && !strcmp(argv[1], "split_in_place_multi")) {
+		struct string_list list = STRING_LIST_INIT_NODUP;
+		int i;
+		char *s = xstrdup(argv[2]);
+		const char *delim = argv[3];
+		int maxsplit = atoi(argv[4]);
+
+		i = string_list_split_in_place_multi(&list, s, delim, maxsplit);
+		printf("%d\n", i);
+		write_list(&list);
+		string_list_clear(&list, 0);
+		free(s);
+		return 0;
+	}
+
 	if (argc == 4 && !strcmp(argv[1], "filter")) {
 		/*
 		 * Retain only the items that have the specified prefix.
