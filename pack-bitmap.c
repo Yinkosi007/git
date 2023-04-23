@@ -1144,22 +1144,18 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 				      show_boundary_commit,
 				      show_boundary_object,
 				      &boundary, NULL);
-	reset_revision_walk();
 	revs->boundary = 0;
 
+	reset_revision_walk();
+	clear_object_flags(UNINTERESTING);
+
 	if (boundary.nr) {
-		for (i = 0; i < boundary.nr; i++) {
-			struct object *obj = boundary.objects[i].item;
-			obj->flags &= ~(BOUNDARY | UNINTERESTING);
-
-			add_pending_object(revs, obj, "");
-		}
-
+		for (i = 0; i < boundary.nr; i++)
+			add_pending_object(revs, boundary.objects[i].item, "");
 		base = fill_in_bitmap(bitmap_git, revs, base, NULL);
 	}
 
 cleanup:
-	revs->boundary = 0;
 	revs->ignore_missing_links = 0;
 	revs->collect_uninteresting = 0;
 
