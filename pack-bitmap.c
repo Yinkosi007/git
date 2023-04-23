@@ -1150,9 +1150,25 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 	clear_object_flags(UNINTERESTING);
 
 	if (boundary.nr) {
-		for (i = 0; i < boundary.nr; i++)
-			add_pending_object(revs, boundary.objects[i].item, "");
-		base = fill_in_bitmap(bitmap_git, revs, base, NULL);
+		struct object *obj;
+		int needs_walk = 0;
+		int pos;
+
+		for (i = 0; i < boundary.nr; i++) {
+			obj = boundary.objects[i].item;
+			pos = bitmap_position(bitmap_git, &obj->oid);
+
+			if (pos < 0 || base == NULL || !bitmap_get(base, pos)) {
+				obj->flags &= ~UNINTERESTING;
+				add_pending_object(revs, obj, "");
+				needs_walk = 1;
+			} else {
+				obj->flags |= SEEN;
+			}
+		}
+
+		if (needs_walk)
+			base = fill_in_bitmap(bitmap_git, revs, base, NULL);
 	}
 
 cleanup:
