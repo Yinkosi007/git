@@ -1075,6 +1075,97 @@ static struct bitmap *fill_in_bitmap(struct bitmap_index *bitmap_git,
 	return base;
 }
 
+static void show_boundary_commit(struct commit *commit, void *data)
+{
+	struct rev_info *boundary_revs = data;
+	if (!(commit->object.flags & BOUNDARY))
+		return;
+
+	add_pending_object(boundary_revs, &commit->object, "");
+}
+
+static void show_boundary_object(struct object *object,
+				 const char *name, void *data)
+{
+}
+
+static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
+					    struct rev_info *revs,
+					    struct object_list *roots)
+{
+	struct bitmap *base = NULL;
+	struct rev_info boundary_revs;
+	int any_missing = 0;
+	unsigned int i;
+
+	revs->ignore_missing_links = 1;
+	revs->collect_uninteresting = 1;
+
+	/*
+	 * OR in any existing reachability bitmaps among `roots` into `base`.
+	 */
+	while (roots) {
+		struct object *object = roots->item;
+		roots = roots->next;
+
+		if (object->type == OBJ_COMMIT &&
+		    add_commit_to_bitmap(bitmap_git, &base,
+					 (struct commit *)object)) {
+			object->flags |= SEEN;
+			continue;
+		}
+
+		any_missing = 1;
+	}
+
+	if (!any_missing)
+		goto cleanup;
+
+	/*
+	 * We didn't have complete coverage of the roots. First OR in any
+	 * bitmaps that are UNINTERESTING between the tips and boundary.
+	 */
+	if (prepare_revision_walk(revs))
+		die("revision walk setup failed");
+	for (i = 0; i < revs->uninteresting_commits.nr; i++) {
+		struct object *obj = revs->uninteresting_commits.objects[i].item;
+		if (obj->type != OBJ_COMMIT)
+			BUG("unexpected non-commit %s marked uninteresting",
+			    oid_to_hex(&obj->oid));
+
+		add_commit_to_bitmap(bitmap_git, &base, (struct commit *)obj);
+	}
+
+	/*
+	 * Then add the boundary commit(s) as fill-in traversal tips.
+	 */
+	repo_init_revisions(the_repository, &boundary_revs, NULL);
+	boundary_revs.ignore_missing_links = 1;
+
+	revs->boundary = 1;
+	traverse_commit_list_filtered(revs,
+				      show_boundary_commit,
+				      show_boundary_object,
+				      &boundary_revs, NULL);
+	reset_revision_walk();
+
+	if (boundary_revs.pending.nr) {
+		for (i = 0; i < boundary_revs.pending.nr; i++) {
+			struct object *obj = boundary_revs.pending.objects[i].item;
+			obj->flags &= ~(BOUNDARY | UNINTERESTING);
+		}
+
+		base = fill_in_bitmap(bitmap_git, &boundary_revs, base, NULL);
+	}
+
+cleanup:
+	revs->boundary = 0;
+	revs->ignore_missing_links = 0;
+	revs->collect_uninteresting = 0;
+
+	return base;
+}
+
 static struct bitmap *find_objects(struct bitmap_index *bitmap_git,
 				   struct rev_info *revs,
 				   struct object_list *roots,
@@ -1603,17 +1694,14 @@ struct bitmap_index *prepare_bitmap_walk(struct rev_info *revs,
 	if (load_bitmap(bitmap_git) < 0)
 		goto cleanup;
 
-	object_array_clear(&revs->pending);
-
 	if (haves) {
-		revs->ignore_missing_links = 1;
-		haves_bitmap = find_objects(bitmap_git, revs, haves, NULL);
-		reset_revision_walk();
-		revs->ignore_missing_links = 0;
-
+		haves_bitmap = find_boundary_objects(bitmap_git, revs, haves);
 		if (!haves_bitmap)
 			BUG("failed to perform bitmap walk");
 	}
+
+	object_array_clear(&revs->pending);
+	reset_revision_walk();
 
 	wants_bitmap = find_objects(bitmap_git, revs, wants, haves_bitmap);
 
