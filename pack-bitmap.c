@@ -1077,11 +1077,11 @@ static struct bitmap *fill_in_bitmap(struct bitmap_index *bitmap_git,
 
 static void show_boundary_commit(struct commit *commit, void *data)
 {
-	struct rev_info *boundary_revs = data;
+	struct object_array *boundary = data;
 	if (!(commit->object.flags & BOUNDARY))
 		return;
 
-	add_pending_object(boundary_revs, &commit->object, "");
+	add_object_array(&commit->object, "", boundary);
 }
 
 static void show_boundary_object(struct object *object,
@@ -1094,7 +1094,7 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 					    struct object_list *roots)
 {
 	struct bitmap *base = NULL;
-	struct rev_info boundary_revs;
+	struct object_array boundary = OBJECT_ARRAY_INIT;
 	int any_missing = 0;
 	unsigned int i;
 
@@ -1139,23 +1139,23 @@ static struct bitmap *find_boundary_objects(struct bitmap_index *bitmap_git,
 	/*
 	 * Then add the boundary commit(s) as fill-in traversal tips.
 	 */
-	repo_init_revisions(the_repository, &boundary_revs, NULL);
-	boundary_revs.ignore_missing_links = 1;
-
 	revs->boundary = 1;
 	traverse_commit_list_filtered(revs,
 				      show_boundary_commit,
 				      show_boundary_object,
-				      &boundary_revs, NULL);
+				      &boundary, NULL);
 	reset_revision_walk();
+	revs->boundary = 0;
 
-	if (boundary_revs.pending.nr) {
-		for (i = 0; i < boundary_revs.pending.nr; i++) {
-			struct object *obj = boundary_revs.pending.objects[i].item;
+	if (boundary.nr) {
+		for (i = 0; i < boundary.nr; i++) {
+			struct object *obj = boundary.objects[i].item;
 			obj->flags &= ~(BOUNDARY | UNINTERESTING);
+
+			add_pending_object(revs, obj, "");
 		}
 
-		base = fill_in_bitmap(bitmap_git, &boundary_revs, base, NULL);
+		base = fill_in_bitmap(bitmap_git, revs, base, NULL);
 	}
 
 cleanup:
